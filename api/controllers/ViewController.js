@@ -2,34 +2,53 @@
 
 // const util = require('util');
 const httpClient = require('./../httpClient');
-// const db = require('./../db');
-// const http = require('http');
-// const https = require('https');
+const db = require('./../db');
 const fs = require('fs');
 const cheerio = require('cheerio');
 const puppeteer = require("puppeteer");
 
-const viewCtrl = {};
+const viewCtrl = {
+    get: get,
+};
 
-viewCtrl.get = async (req, res) => {
-    var id = req.params.id;
+async function get(req, res) {
     var type = "anime";
+    var id = +req.params.id;
 
+    if (Number.isNaN(id)) {
+        res.send("Invalid ID.");
+    }
+
+    var dataFromDb = await db.getAsync(id);
+
+    if (dataFromDb) {
+        var timestamp = await db.getTimestampAsync(id);
+        var createdAt = new Date(+timestamp);
+
+        if (createdAt.setMonth(createdAt.getMonth() + 1) > new Date().getTime()) {
+            // return cache:
+            const imageBuffer = Buffer.from(dataFromDb, "base64");
+            res.set("Content-Type", "image/png");
+            res.send(imageBuffer);
+            return;
+        }
+    }
+
+    fetchInfo(type, id, res);
+}
+
+function fetchInfo(type, id, res) {
     var options = {
         host: "myanimelist.net",
-        port: 443,
         path: `/${type}/${id}`,
-        method: "GET",
-        headers: {
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "UserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:107.0) Gecko/20100101 Firefox/107.0",
-        },
     };
 
     httpClient.getText(options)
         .then(async function (response) {
             var outputHtml = processHtml(response.content);
             const imageBuffer = await htmlToImage(outputHtml);
+
+            await db.setAsync(id, imageBuffer.toString("base64"));
 
             res.set("Content-Type", "image/png");
             res.send(imageBuffer);
@@ -38,15 +57,13 @@ viewCtrl.get = async (req, res) => {
             console.log(err);
             res.send("Error");
         });
-
-};
+}
 
 function processHtml(html) {
     var styles = "";
 
     try {
         styles = fs.readFileSync('./api/content/styles.css', 'utf8');
-        // console.log(data.toString());
     } catch (e) {
         console.log('Error:', e.stack);
     }
