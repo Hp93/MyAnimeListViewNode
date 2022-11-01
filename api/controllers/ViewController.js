@@ -26,7 +26,7 @@ async function get(req, res) {
             var timestamp = await db.getTimestampAsync(id);
             var createdAt = new Date(+timestamp);
 
-            if (createdAt.setMonth(createdAt.getMonth() + 1) > new Date().getTime()) {
+            if (createdAt.setDate(createdAt.getDate() + process.env.WEB_CACHEDAY) < new Date().getTime()) {
                 // return cache:
                 const imageBuffer = Buffer.from(dataFromDb, "base64");
                 res.set("Content-Type", "image/png");
