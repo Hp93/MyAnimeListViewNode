@@ -12,51 +12,53 @@ const viewCtrl = {
 };
 
 async function get(req, res) {
-    var type = "anime";
-    var id = +req.params.id;
+    try {
+        var type = "anime";
+        var id = req.params.id;
 
-    if (Number.isNaN(id)) {
-        res.send("Invalid ID.");
-    }
-
-    var dataFromDb = await db.getAsync(id);
-
-    if (dataFromDb) {
-        var timestamp = await db.getTimestampAsync(id);
-        var createdAt = new Date(+timestamp);
-
-        if (createdAt.setMonth(createdAt.getMonth() + 1) > new Date().getTime()) {
-            // return cache:
-            const imageBuffer = Buffer.from(dataFromDb, "base64");
-            res.set("Content-Type", "image/png");
-            res.send(imageBuffer);
-            return;
+        if (Number.isNaN(+req.params.id)) {
+            res.send("Invalid ID.");
         }
-    }
 
-    fetchInfo(type, id, res);
+        var dataFromDb = await db.getAsync(id);
+
+        if (dataFromDb) {
+            var timestamp = await db.getTimestampAsync(id);
+            var createdAt = new Date(+timestamp);
+
+            if (createdAt.setMonth(createdAt.getMonth() + 1) > new Date().getTime()) {
+                // return cache:
+                const imageBuffer = Buffer.from(dataFromDb, "base64");
+                res.set("Content-Type", "image/png");
+                res.send(imageBuffer);
+                return;
+            }
+        }
+
+        var imageBuffer = await fetchInfo(type, id, res);
+        res.set("Content-Type", "image/png");
+        res.send(imageBuffer);
+    }
+    catch (ex) {
+        console.log(ex);
+        res.send("Unexpected exception has occured.");
+    };
 }
 
-function fetchInfo(type, id, res) {
+async function fetchInfo(type, id) {
     var options = {
         host: "myanimelist.net",
         path: `/${type}/${id}`,
     };
 
-    httpClient.getText(options)
-        .then(async function (response) {
-            var outputHtml = processHtml(response.content);
-            const imageBuffer = await htmlToImage(outputHtml);
+    var response = await httpClient.getText(options);
 
-            await db.setAsync(id, imageBuffer.toString("base64"));
+    var outputHtml = processHtml(response.content);
+    const imageBuffer = await htmlToImage(outputHtml);
 
-            res.set("Content-Type", "image/png");
-            res.send(imageBuffer);
-        })
-        .catch(function (err) {
-            console.log(err);
-            res.send("Error");
-        });
+    await db.setAsync(id, imageBuffer.toString("base64"));
+
+    return imageBuffer;
 }
 
 function processHtml(html) {
