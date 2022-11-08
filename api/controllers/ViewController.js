@@ -16,7 +16,11 @@ async function get(req, res) {
         var type = "anime";
         var id = req.params.id;
 
-        if (Number.isNaN(+req.params.id)) {
+        if (req.params.id.endsWith(".jpg") || req.params.id.endsWith(".png")) {
+            id = req.params.id.replace(".jpg", "").replace(".png", "");
+        }
+
+        if (Number.isNaN(+id)) {
             res.send("Invalid ID.");
         }
 
@@ -41,7 +45,12 @@ async function get(req, res) {
     }
     catch (ex) {
         console.log(ex);
-        res.send("Unexpected exception has occured.");
+
+        if (typeof ex === "string") {
+            res.send("Unexpected exception has occured. Exception: " + ex);
+        } else {
+            res.send("Unexpected exception has occured.");
+        }
     };
 }
 
@@ -52,6 +61,10 @@ async function fetchInfo(type, id) {
     };
 
     var response = await httpClient.getText(options);
+
+    if (response.statusCode !== 200) {
+        throw `Invalid response. Status code: ${response.statusCode}`;
+    }
 
     var outputHtml = processHtml(response.content);
     const imageBuffer = await htmlToImage(outputHtml);
